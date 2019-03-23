@@ -374,7 +374,6 @@ elif [[ "$NAMESPACE" == "$APPLICATION_NAMESPACE" ]]; then
     echo
     echo "Namespace exists"
 else
-    export STEP="${STEP},4A"
     echo
     echo "*** Running the command \"kubectl create namespace $APPLICATION_NAMESPACE\" to create namespace $APPLICATION_NAMESPACE ***"
     echo
@@ -392,7 +391,7 @@ if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are y
     echo
     echo "Skipped labelling namespaces for automatic sidecar injection"
 elif [[ "$NAMESPACE" == "$APPLICATION_NAMESPACE" ]]; then
-    export STEP="${STEP},4B"
+    export STEP="${STEP},4"
     echo
     echo "*** Running the command \"kubectl label namespace $APPLICATION_NAMESPACE istio-injection=enabled\" to label namespaces for automatic sidecar injection ***"
     echo
