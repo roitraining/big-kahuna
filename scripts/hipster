@@ -441,10 +441,14 @@ else
     cd $PROJDIR
 	kubectl apply -f ./istio-manifests
     echo
-    echo "*** Running command \"skaffold run --default-repo=gcr.io/$GCP_PROJECT\" to setup microservices ***"
+    echo "*** Running command \"skaffold run -p gcb --default-repo=gcr.io/$GCP_PROJECT\" to setup microservices ***"
     echo
-    skaffold run --default-repo=gcr.io/$GCP_PROJECT
+    skaffold run -p gcb --default-repo=gcr.io/$GCP_PROJECT
     cd $current_dir
+    echo
+    echo "*** Running command \"sleep 180\" to wait for PODs to initialize ***"
+    echo
+    sleep 180
     echo
     echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get service\" to display service ***"
     echo
@@ -461,7 +465,7 @@ else
     echo "*** Troubleshooting Tips ***"
     echo
     echo "kubectl apply -f ./istio-manifests # to setup microservices"
-    echo "skaffold run --default-repo=gcr.io/$GCP_PROJECT # to setup microservices"
+    echo "skaffold run -p gcb --default-repo=gcr.io/$GCP_PROJECT # to setup microservices"
     echo "kubectl -n $APPLICATION_NAMESPACE get services # to Display services"
     echo "kubectl -n $APPLICATION_NAMESPACE get deployments # to Display deployments"
     echo "kubectl -n $APPLICATION_NAMESPACE get pods # to Display pods"
