@@ -131,6 +131,7 @@ export CLOUDFUNCTIONS_API_STATUS=$(gcloud services list --filter="NAME:cloudfunc
 export DEPLOYMENTMANAGER_API_STATUS=$(gcloud services list --filter="NAME:deploymentmanager.googleapis.com" --format="value(NAME)")
 export STACKDRIVERLOGGING_API_STATUS=$(gcloud services list --filter="NAME:logging.googleapis.com" --format="value(NAME)")
 export STACKDRIVERTRACE_API_STATUS=$(gcloud services list --filter="NAME:cloudtrace.googleapis.com" --format="value(NAME)")
+export CLOUDBUILD_API_STATUS=$(gcloud services list --filter="NAME:cloudbuild.googleapis.com" --format="value(NAME)")
 echo
 echo "Do you want to enable Cloud APIs, Cloud Functions, Kubernetes Engine, Container Registry, Google Cloud Deployment Manager, Stackdriver Logging, Google Cloud SQL and Cloud SQL Admin APIs?"
 if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
@@ -219,6 +220,14 @@ export STEP="${STEP},1"
         gcloud services enable cloudtrace.googleapis.com # Enable Stackdriver Trace API
     else 
         echo "Stackdriver Trace API enabled"
+    fi
+    if [ -z "$CLOUDBUILD_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable cloudbuild.googleapis.com\" to enable Cloud Build API ***"
+        echo
+        gcloud services enable cloudbuild.googleapis.com # Enable Cloud Build API
+    else 
+        echo "Cloud Build API enabled"
     fi
     echo
     echo "*** Troubleshooting Tips ***"
@@ -326,13 +335,19 @@ else
     echo
     gcloud beta container clusters update $GCP_CLUSTER --zone=$GCP_ZONE --update-addons=Istio=ENABLED --istio-config=auth=MTLS_PERMISSIVE
     echo
-    echo "*** Running the command \"kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml\" to configure stackdriver ***"
+    echo "*** Running command \"sleep 180\" to wait for istio PODs to initialize ***"
     echo
-    kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml
+    sleep 180
     echo
-    echo "*** Running the command \"kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml\" to configure stackdriver ***"
+    echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-tracing.yaml\" to configure Stackdriver tracing ***"
     echo
-    kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml -O ~/tmp/stackdriver-tracing.yaml
+    kubectl apply -f ~/tmp/stackdriver-tracing.yaml
+    echo
+    echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-logs.yaml\" to configure Stackdriver logging ***"
+    echo
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml -O ~/tmp/stackdriver-logs.yaml
+    kubectl apply -f ~/tmp/stackdriver-logs.yaml
     echo
     echo "*** Troubleshooting Tips ***"
     echo
@@ -368,7 +383,6 @@ elif [[ "$NAMESPACE" == "$APPLICATION_NAMESPACE" ]]; then
     echo
     echo "Namespace exists"
 else
-    export STEP="${STEP},4A"
     echo
     echo "*** Running the command \"kubectl create namespace $APPLICATION_NAMESPACE\" to create namespace $APPLICATION_NAMESPACE ***"
     echo
@@ -386,7 +400,7 @@ if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are y
     echo
     echo "Skipped labelling namespaces for automatic sidecar injection"
 elif [[ "$NAMESPACE" == "$APPLICATION_NAMESPACE" ]]; then
-    export STEP="${STEP},4B"
+    export STEP="${STEP},4"
     echo
     echo "*** Running the command \"kubectl label namespace $APPLICATION_NAMESPACE istio-injection=enabled\" to label namespaces for automatic sidecar injection ***"
     echo
@@ -427,10 +441,14 @@ else
     cd $PROJDIR
 	kubectl apply -f ./istio-manifests
     echo
-    echo "*** Running command \"skaffold run --default-repo=gcr.io/$GCP_PROJECT\" to setup microservices ***"
+    echo "*** Running command \"skaffold run -p gcb --default-repo=gcr.io/$GCP_PROJECT\" to setup microservices ***"
     echo
-    skaffold run --default-repo=gcr.io/$GCP_PROJECT
+    skaffold run -p gcb --default-repo=gcr.io/$GCP_PROJECT
     cd $current_dir
+    echo
+    echo "*** Running command \"sleep 180\" to wait for PODs to initialize ***"
+    echo
+    sleep 180
     echo
     echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get service\" to display service ***"
     echo
@@ -447,7 +465,7 @@ else
     echo "*** Troubleshooting Tips ***"
     echo
     echo "kubectl apply -f ./istio-manifests # to setup microservices"
-    echo "skaffold run --default-repo=gcr.io/$GCP_PROJECT # to setup microservices"
+    echo "skaffold run -p gcb --default-repo=gcr.io/$GCP_PROJECT # to setup microservices"
     echo "kubectl -n $APPLICATION_NAMESPACE get services # to Display services"
     echo "kubectl -n $APPLICATION_NAMESPACE get deployments # to Display deployments"
     echo "kubectl -n $APPLICATION_NAMESPACE get pods # to Display pods"
