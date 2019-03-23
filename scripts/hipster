@@ -131,6 +131,7 @@ export CLOUDFUNCTIONS_API_STATUS=$(gcloud services list --filter="NAME:cloudfunc
 export DEPLOYMENTMANAGER_API_STATUS=$(gcloud services list --filter="NAME:deploymentmanager.googleapis.com" --format="value(NAME)")
 export STACKDRIVERLOGGING_API_STATUS=$(gcloud services list --filter="NAME:logging.googleapis.com" --format="value(NAME)")
 export STACKDRIVERTRACE_API_STATUS=$(gcloud services list --filter="NAME:cloudtrace.googleapis.com" --format="value(NAME)")
+export CLOUDBUILD_API_STATUS=$(gcloud services list --filter="NAME:cloudbuild.googleapis.com" --format="value(NAME)")
 echo
 echo "Do you want to enable Cloud APIs, Cloud Functions, Kubernetes Engine, Container Registry, Google Cloud Deployment Manager, Stackdriver Logging, Google Cloud SQL and Cloud SQL Admin APIs?"
 if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
@@ -219,6 +220,14 @@ export STEP="${STEP},1"
         gcloud services enable cloudtrace.googleapis.com # Enable Stackdriver Trace API
     else 
         echo "Stackdriver Trace API enabled"
+    fi
+    if [ -z "$CLOUDBUILD_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable cloudbuild.googleapis.com\" to enable Cloud Build API ***"
+        echo
+        gcloud services enable cloudbuild.googleapis.com # Enable Cloud Build API
+    else 
+        echo "Cloud Build API enabled"
     fi
     echo
     echo "*** Troubleshooting Tips ***"
