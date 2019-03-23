@@ -1,0 +1,222 @@
+#! /bin/bash 
+#################################################################################
+######################## Add scripts directory to path ##########################
+#################################################################################
+
+# User prompt function
+function ask_yes_or_no() {
+    read -p "$1 ([n]o to skip, any key to execute): "
+    case $(echo $REPLY | tr '[A-Z]' '[a-z]') in
+        n|no) echo "no" ;;
+        *)    echo "yes" ;;
+    esac
+}
+
+if [ -x "$(command -v helm)" ]; then
+    echo
+    echo "*** Helm is installed ***"
+    echo 
+    # Prompt user to validate configuration values
+    echo "Do you wish re-install Helm?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+#        cd ~/ && rm -rf ~/helm && mkdir ~/helm
+#        export HELM_INSTALL_DIR=~/helm
+#        cd ~/helm && curl https://raw.githubusercontent.com/helm/helm/master/scripts/get > ~/helm/get_helm.sh && chmod 700 ~/helm/get_helm.sh && ~/helm/get_helm.sh
+        cd ~/ && rm -rf ~/linux-amd64
+        wget https://storage.googleapis.com/kubernetes-helm/helm-v2.11.0-linux-amd64.tar.gz && tar -zxvf helm-v2.11.0-linux-amd64.tar.gz && rm -rf helm-v2.11.0-linux-amd64.tar.gz && cd ~/linux-amd64
+        export HELM_INSTALL_DIR=$PWD
+        echo
+        echo "*** Helm installed in directory $PWD ***"
+        echo
+        cd ~/
+    fi
+else
+    echo
+    echo "Do you wish to install Helm?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+#        cd ~/ && rm -rf ~/helm && mkdir ~/helm
+#        export HELM_INSTALL_DIR=~/helm
+#        cd ~/helm && curl https://raw.githubusercontent.com/helm/helm/master/scripts/get > ~/helm/get_helm.sh && chmod 700 ~/helm/get_helm.sh && ~/helm/get_helm.sh
+        cd ~/ && rm -rf ~/linux-amd64 
+        wget https://storage.googleapis.com/kubernetes-helm/helm-v2.11.0-linux-amd64.tar.gz && tar -zxvf helm-v2.11.0-linux-amd64.tar.gz && rm -rf helm-v2.11.0-linux-amd64.tar.gz && cd ~/linux-amd64
+        export HELM_INSTALL_DIR=$PWD
+        echo
+        echo "*** Helm installed in directory $PWD ***"
+        if grep -q "helm" ~/.bash_profile
+        then
+            echo
+            echo "*** Path is $PATH ***"
+        else
+            echo
+            echo "*** Adding $PWD to PATH ***"
+            echo "# Add Helm to PATH" >> ~/.bash_profile && echo "export PATH=$PWD:\$PATH" >> ~/.bash_profile
+        fi
+        source ~/.bash_profile 
+        cd ~/
+    fi
+fi
+
+if [ -x "$(command -v istioctl)" ]; then
+    echo
+    echo "*** Istio is installed ***"
+    echo 
+    # Prompt user to validate configuration values
+    echo "Do you wish re-install Istio?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        cd ~/ && rm -rf ~/istio*   
+        curl -L https://git.io/getLatestIstio | sh -
+        cd istio*
+        echo
+        echo "*** Istio installed in directory $PWD ***"
+        echo
+        cd ~/
+    fi
+else
+    echo
+    echo "Do you wish to install Istio?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        cd ~/ && rm -rf ~/istio*   
+        curl -L https://git.io/getLatestIstio | sh -
+        cd istio*
+        echo
+        echo "*** Istio installed in directory $PWD ***"
+        if grep -q "istio" ~/.bash_profile
+        then
+            echo
+            echo "*** Path is $PATH ***"
+        else
+            echo
+            echo "*** Adding $PWD to PATH ***"
+            echo "# Add istio to PATH" >> ~/.bash_profile && echo "export PATH=$PWD/bin:\$PATH" >> ~/.bash_profile
+        fi
+        source ~/.bash_profile 
+        cd ~/
+    fi
+fi
+
+if [ -x "$(command -v apigee-istio)" ]; then
+    echo
+    echo "*** Istio Apigee Adapter is installed ***"
+    echo 
+    # Prompt user to validate configuration values
+    echo "Do you wish re-install Istio Apigee Adapter?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        cd ~/ && rm -rf ~/apigee-istio-adapter # to clean up existing resources
+        mkdir ~/apigee-istio-adapter && cd ~/apigee-istio-adapter # go to root directory
+        wget https://github.com/apigee/istio-mixer-adapter/releases/download/1.0.3/istio-mixer-adapter_1.0.3_linux_64-bit.tar.gz # download istio mixer adapter
+        tar -zxvf istio-mixer-adapter_1.0.3_linux_64-bit.tar.gz # extract istio mixer adapter
+        cp samples/apigee/handler.yaml samples/apigee/handler.sav # make a copy of the handler file
+        cp samples/apigee/authentication-policy.yaml samples/apigee/authentication-policy.sav # make a copy of the authentication-policy file
+        cp samples/apigee/authentication-policy.yaml samples/apigee/authentication-policy.tpl.yaml # make a copy of the authentication-policy file
+        perl -pi -e 's/namespace:\ default/namespace:\ \${APPLICATION_NAMESPACE}/g' samples/apigee/authentication-policy.tpl.yaml # set variable  
+        perl -pi -e 's/issuer:\ REPLACE\ ME/issuer:\ https:\/\/\${APIGEE_ORGANIZATION}-\${APIGEE_ENVIRONMENT}.apigee.net\/istio-auth\/token/g' samples/apigee/authentication-policy.tpl.yaml # set variable  
+        perl -pi -e 's/jwks_uri:\ REPLACE\ ME/jwks_uri:\ https:\/\/\${APIGEE_ORGANIZATION}-\${APIGEE_ENVIRONMENT}.apigee.net\/istio-auth\/certs/g' samples/apigee/authentication-policy.tpl.yaml # set variable 
+        cp samples/apigee/rule.yaml samples/apigee/rule.sav # make a copy of the rule file
+        perl -pi -e 's/destination.namespace == \"default\"/destination.namespace\ ==\ \"\${APPLICATION_NAMESPACE}\"/g' samples/apigee/rule.yaml # set variable for namespace 
+        echo
+        echo "*** Apigee Istio Mixer installed in directory $PWD ***"
+        echo
+        cd ~/
+    fi
+else
+    echo
+    echo "Do you wish to install Istio Apigee Adapter?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        cd ~/ && rm -rf ~/apigee-istio-adapter # to clean up existing resources
+        mkdir ~/apigee-istio-adapter && cd ~/apigee-istio-adapter # go to root directory
+        wget https://github.com/apigee/istio-mixer-adapter/releases/download/1.0.3/istio-mixer-adapter_1.0.3_linux_64-bit.tar.gz # download istio mixer adapter
+        tar -zxvf istio-mixer-adapter_1.0.3_linux_64-bit.tar.gz # extract istio mixer adapter
+        cp samples/apigee/handler.yaml samples/apigee/handler.sav # make a copy of the handler file
+        cp samples/apigee/authentication-policy.yaml samples/apigee/authentication-policy.sav # make a copy of the authentication-policy file
+        cp samples/apigee/authentication-policy.yaml samples/apigee/authentication-policy.tpl.yaml # make a copy of the authentication-policy file
+        perl -pi -e 's/namespace:\ default/namespace:\ \${APPLICATION_NAMESPACE}/g' samples/apigee/authentication-policy.tpl.yaml # set variable  
+        perl -pi -e 's/issuer:\ REPLACE\ ME/issuer:\ https:\/\/\${APIGEE_ORGANIZATION}-\${APIGEE_ENVIRONMENT}.apigee.net\/istio-auth\/token/g' samples/apigee/authentication-policy.tpl.yaml # set variable  
+        perl -pi -e 's/jwks_uri:\ REPLACE\ ME/jwks_uri:\ https:\/\/\${APIGEE_ORGANIZATION}-\${APIGEE_ENVIRONMENT}.apigee.net\/istio-auth\/certs/g' samples/apigee/authentication-policy.tpl.yaml # set variable 
+        cp samples/apigee/rule.yaml samples/apigee/rule.sav # make a copy of the rule file
+        perl -pi -e 's/destination.namespace == \"default\"/destination.namespace\ ==\ \"\${APPLICATION_NAMESPACE}\"/g' samples/apigee/rule.yaml # set variable for namespace 
+        echo
+        echo "*** Apigee Istio Mixer installed in directory $PWD ***"
+        if grep -q "apigee" ~/.bash_profile
+        then
+            echo
+            echo "*** Path is $PATH ***"
+        else
+            echo
+            echo "*** Adding $PWD to PATH ***"
+            echo "# Add istio to PATH" >> ~/.bash_profile && echo "export PATH=$PWD:\$PATH" >> ~/.bash_profile
+        fi
+        source ~/.bash_profile 
+        cd ~/
+    fi
+fi
+
+if [ -x "$(command -v siege)" ]; then
+    echo
+    echo "*** Siege is installed ***"
+    echo 
+    # Prompt user to validate configuration values
+    echo "Do you wish re-install Siege?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        cd ~/ && rm -rf ~/siege*   
+        wget http://download.joedog.org/siege/siege-latest.tar.gz && tar -zxvf siege-latest.tar.gz && rm -rf siege-latest.tar.gz 
+        cd siege*
+        ./configure --prefix=$PWD
+        make
+        sudo make install
+        echo
+        echo "*** Siege installed in directory $PWD ***"
+        echo
+        cd ~/
+    fi
+else
+    echo
+    echo "Do you wish to install Siege?"
+    if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        cd ~/ && rm -rf ~/siege*   
+        wget http://download.joedog.org/siege/siege-latest.tar.gz && tar -zxvf siege-latest.tar.gz && rm -rf siege-latest.tar.gz 
+        cd siege*
+        ./configure --prefix=$PWD
+        make
+        sudo make install
+        echo
+        echo "*** Siege installed in directory $PWD ***"
+        if grep -q "siege" ~/.bash_profile
+        then
+            echo
+            echo "*** Path is $PATH ***"
+        else
+            echo
+            echo "*** Adding $PWD to PATH ***"
+            echo "# Add Siege to PATH" >> ~/.bash_profile && echo "export PATH=$PWD/bin:\$PATH" >> ~/.bash_profile
+        fi
+        source ~/.bash_profile 
+        cd ~/
+    fi
+fi
+
+export HOMEDIR=$(eval echo "~$(whoami)")
+
+if grep -q "scripts" ~/.bash_profile
+then
+    echo
+    echo "*** Path is $PATH ***"
+    echo
+else
+    echo "*** Adding $HOMEDIR/dp-ert-gcp-lab/scripts to PATH ***"
+    cd $HOMEDIR/dp-ert-gcp-lab/scripts && echo "# Add scripts to PATH" >> ~/.bash_profile && echo "export PATH=$PWD:\$PATH" >> ~/.bash_profile && source ~/.bash_profile     
+    echo
+    echo "*** Path is $PATH ***"
+fi
+
+# Create scripts tmp directory
+export HOMEDIR=$(eval echo "~$(whoami)")
+export TEMPDIR=$HOMEDIR/tmp
+if ! [ -d $TEMPDIR ]; then
+    mkdir $TEMPDIR
+fi
+
+echo
+read -n 1 -s -r -p "You are all setup. Press any key to exit this terminal and continue in the new terminal window."
+kill -9 $PPID
+
+exit
