@@ -326,13 +326,19 @@ else
     echo
     gcloud beta container clusters update $GCP_CLUSTER --zone=$GCP_ZONE --update-addons=Istio=ENABLED --istio-config=auth=MTLS_PERMISSIVE
     echo
-    echo "*** Running the command \"kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml\" to configure stackdriver ***"
+    echo "*** Running command \"sleep 180\" to wait for istio PODs to initialize ***"
     echo
-    kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml
+    sleep 180
     echo
-    echo "*** Running the command \"kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml\" to configure stackdriver ***"
+    echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-tracing.yaml\" to configure Stackdriver tracing ***"
     echo
-    kubectl apply -f https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml -O ~/tmp/stackdriver-tracing.yaml
+    kubectl apply -f ~/tmp/stackdriver-tracing.yaml
+    echo
+    echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-logs.yaml\" to configure Stackdriver logging ***"
+    echo
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml -O ~/tmp/stackdriver-logs.yaml
+    kubectl apply -f ~/tmp/stackdriver-logs.yaml
     echo
     echo "*** Troubleshooting Tips ***"
     echo
