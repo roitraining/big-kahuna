@@ -13,7 +13,7 @@ function ask_yes_or_no() {
 }
 
 export HOMEDIR=$(eval echo "~$(whoami)")
-export PROJDIR=$HOMEDIR/dp-ert-gcp-lab/projects/istio/hipster
+export PROJDIR=$HOMEDIR/big-kahuna/projects/istio/hipster
 export TEMPDIR=$HOMEDIR/tmp/hipster
 export CONFIGFILE=hipster.config
 
