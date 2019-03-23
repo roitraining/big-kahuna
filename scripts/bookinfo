@@ -1,0 +1,1397 @@
+#!/bin/bash
+#################################################################################
+##############  Explore Istio BookInfo Microservice Application   ###############
+#################################################################################
+
+# User prompt function
+function ask_yes_or_no() {
+    read -p "$1 ([n]o to skip, or any key to execute): "
+    case $(echo $REPLY | tr '[A-Z]' '[a-z]') in
+        n|no) echo "no" ;;
+        *)    echo "yes" ;;
+    esac
+}
+
+export HOMEDIR=$(eval echo "~$(whoami)")
+if ! [ -d $HOMEDIR/tmp ]; then
+    echo
+    echo "*** $HOMEDIR/tmp directory not found ***"
+    echo "*** Run command \"$HOMEDIR/big-kahuna/scripts/setup && source ~/.bash_profile\" to configure the Cloud Shell environment ***"
+    echo 
+    exit 0
+fi
+
+if ! [ -x "$(command -v helm)" ]; then
+    echo
+    echo "*** Helm not installed ***"
+    echo "*** Run command \"$HOMEDIR/big-kahuna/scripts/setup && source ~/.bash_profile\" to configure the Cloud Shell environment ***"
+    echo 
+    exit 1
+fi
+
+if ! [ -x "$(command -v istioctl)" ]; then
+    echo
+    echo "*** Istio not installed ***"
+    echo "*** Run command \"$HOMEDIR/big-kahuna/scripts/setup && source ~/.bash_profile\" to configure the Cloud Shell environment ***"
+    echo 
+    exit 1
+fi
+
+export PROJDIR=$HOMEDIR/big-kahuna/projects/istio/bookinfo
+export TEMPDIR=$HOMEDIR/tmp/bookinfo
+export CONFIGFILE=bookinfo.config
+
+# Set immutable environment variables
+export GCP_CLUSTER=bookinfo
+export APPLICATION_NAMESPACE=bookinfo
+export APPLICATION_NAME=bookinfo
+
+if [ -d $PROJDIR ]; then
+    cd $PROJDIR
+else
+    echo
+    echo "BookInfo project directory $PROJDIR does not exist. Check and try again."
+    echo
+    exit 0
+fi
+
+if ! [ -d $TEMPDIR ]; then
+    mkdir $TEMPDIR
+fi
+
+# Source the configuration file to set values as environment variables
+if [ -e "$CONFIGFILE" ]; then
+    source $HOMEDIR/.bash_profile
+    source $CONFIGFILE
+    echo
+else
+    echo
+    echo "BookInfo configuration file $CONFIGFILE does not exist. Check and try again."
+    echo
+    exit 0
+fi
+
+# Display relevant properties for validation
+if [ -e "$CONFIGFILE" ]; then
+    echo "GCP project is : ${GCP_PROJECT:=NOT_SET}"
+    echo "GCP region is : ${GCP_REGION:=NOT_SET}"
+    echo "GCP zone is : ${GCP_ZONE:=NOT_SET}"
+    echo "Istio path is : ${ISTIO_PATH:=NOT_SET}"
+    echo "Service and Deployment YAML file is : ${APPLICATION_YAML:=NOT_SET}"
+    echo "Ingress YAML file is : ${INGRESS_YAML:=NOT_SET}"
+    echo "mTLS is : ${ISTIO_AUTH:=NOT_SET}"
+    echo
+else
+    echo "Project configuration file $CONFIGFILE does not exist"
+    echo
+    exit 0
+fi
+
+# Prompt user to validate configuration values
+echo "Do you wish to continue change the project from ${GCP_PROJECT:=NOT_SET}?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+else
+    echo "Enter the new project ID (NOT PROJECT NAME)"
+    read GCP_PROJECT
+    echo
+fi
+
+# Set GCP project and zone using environment variables
+gcloud config set project $GCP_PROJECT > /dev/null 2>&1 #Set project region
+gcloud config set compute/zone $GCP_ZONE > /dev/null 2>&1 #Set project zone
+
+# Set GCP project and zone using environment variables
+kubectx gke_${GCP_PROJECT}_${GCP_ZONE}_${GCP_CLUSTER}-cluster
+
+# Set the directory for the YAML files and scripts
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+echo
+
+# Display menu options
+while :
+do
+clear
+cat<<EOF
+===================================================================================================================
+        Menu for Deploying BookInfo Application to Explore Istio Traffic Management and Telemetry Features
+-------------------------------------------------------------------------------------------------------------------
+Please enter number to select your choice:
+(1)  Enable APIs
+(2)  Create Kubernetes cluster
+(3A) Install Istio core components using Helm
+(3B) Install Istio core components using GKE  
+(4)  Configure namespace for automatic sidecar injection
+(5)  Configure service and deployment
+(6)  Configure gateway and virtualservice
+(7)  Explore traffic routing
+(8)  Delete all resources
+(Q)  Quit
+-------------------------------------------------------------------------------------------------------------------
+EOF
+    echo "Steps performed${STEP}"
+    echo
+    echo "What additional step do you want to perform?"
+    read
+    clear
+    case "$REPLY$SUFFIX" in
+
+"1")
+echo
+echo "*** Running command \"config set project $GCP_PROJECT\" to set project ***"
+echo
+gcloud config set project $GCP_PROJECT #Set project region
+echo
+echo "*** Running command \"gcloud config set compute/zone $GCP_ZONE\" to set zone ***"
+echo
+gcloud config set compute/zone $GCP_ZONE #Set project zone
+echo
+echo "*** Running command \"gcloud services list\" to display enabled APIs ***"
+echo
+gcloud services list
+export CLOUD_API_STATUS=$(gcloud services list --filter="NAME:cloudapis.googleapis.com" --format="value(NAME)")
+export CONTAINER_API_STATUS=$(gcloud services list --filter="NAME:container.googleapis.com" --format="value(NAME)")
+export CONTAINERREGISTRY_API_STATUS=$(gcloud services list --filter="NAME:containerregistry.googleapis.com" --format="value(NAME)")
+export DATASTORE_API_STATUS=$(gcloud services list --filter="NAME:datastore.googleapis.com" --format="value(NAME)")
+export SQLCOMPONENT_API_STATUS=$(gcloud services list --filter="NAME:sql-component.googleapis.com" --format="value(NAME)")
+export SQLADMIN_API_STATUS=$(gcloud services list --filter="NAME:sqladmin.googleapis.com" --format="value(NAME)")
+export CLOUDFUNCTIONS_API_STATUS=$(gcloud services list --filter="NAME:cloudfunctions.googleapis.com" --format="value(NAME)")
+export DEPLOYMENTMANAGER_API_STATUS=$(gcloud services list --filter="NAME:deploymentmanager.googleapis.com" --format="value(NAME)")
+export STACKDRIVERLOGGING_API_STATUS=$(gcloud services list --filter="NAME:logging.googleapis.com" --format="value(NAME)")
+export STACKDRIVERMONITORING_API_STATUS=$(gcloud services list --filter="NAME:monitoring.googleapis.com" --format="value(NAME)")
+export STACKDRIVERTRACE_API_STATUS=$(gcloud services list --filter="NAME:cloudtrace.googleapis.com" --format="value(NAME)")
+export CLOUDDNS_API_STATUS=$(gcloud services list --filter="NAME:dns.googleapis.com" --format="value(NAME)")
+echo
+echo "Do you want to enable APIs?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped enabling APIs"
+    echo
+    echo "*** Troubleshooting Tips ***"
+    echo
+    echo "gcloud config set project $GCP_PROJECT # to set project ***"
+    echo "gcloud config set compute/zone $GCP_ZONE # to set zone ***"
+    echo "gcloud services enable cloudapis.googleapis.com # to enable cloud API"
+    echo "gcloud services enable container.googleapis.com # to enable container API"
+    echo "gcloud services enable containerregistry.googleapis.com # to enable container registry API"
+    echo "gcloud services enable sql-component.googleapis.com # to enable SQL component API"
+    echo "gcloud services enable sqladmin.googleapis.com # to enable SQL admin API"
+    echo "gcloud services enable cloudfunctions.googleapis.com # to enable Cloud Functions API"
+    echo "gcloud services enable deploymentmanager.googleapis.com # to enable Deployment Manager API"
+    echo "gcloud services enable logging.googleapis.com # to enable Stackdriver Logging API"
+    echo "gcloud services enable monitoring.googleapis.com # to enable Stackdriver Monitoring API"
+    echo "gcloud services enable cloudtrace.googleapis.com # to enable Stackdriver Trace API"
+    echo "gcloud services enable dns.googleapis.com # to enable CloudDNS API"
+else
+export STEP="${STEP},1"
+    if [ -z "$CLOUD_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable cloudapis.googleapis.com\" to enable cloud APIs ***"
+        echo
+        gcloud services enable cloudapis.googleapis.com # Enable cloud APIs
+    else 
+        echo "Cloud API enabled"
+    fi
+    if [ -z "$CONTAINER_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable container.googleapis.com\" to enable container engine API ***"
+        echo
+        gcloud services enable container.googleapis.com # Enable container engine API
+    else 
+        echo "Container API enabled"
+    fi
+    if [ -z "$CONTAINERREGISTRY_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable containerregistry.googleapis.com\" to enable container registry API ***"
+        echo
+        gcloud services enable containerregistry.googleapis.com # Enable container registry API
+        gcloud auth configure-docker -q # Configure docker CLI to authenticate GCR
+    else 
+        echo "Container Registry API enabled"
+    fi
+    if [ -z "$DATASTORE_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable datastore.googleapis.com\" to enable datastore API ***"
+        echo
+        gcloud services enable datastore.googleapis.com # Enable datastore API
+    else 
+        echo "Datastore API enabled"
+    fi
+
+    if [ -z "$SQLADMIN_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable sqladmin.googleapis.com\" to enable SQL Admin API ***"
+        echo
+        gcloud services enable sqladmin.googleapis.com # Enable SQL admin API
+    else 
+        echo "Cloud SQL Admin API enabled"
+    fi
+    if [ -z "$SQLCOMPONENT_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable sql-component.googleapis.com\" to enable SQL Component API ***"
+        echo
+        gcloud services enable sql-component.googleapis.com # Enable SQL component API
+    else 
+        echo "Google Cloud SQL API enabled"
+    fi
+    if [ -z "$CLOUDFUNCTIONS_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable cloudfunctions.googleapis.com\" to enable Cloud Functions API ***"
+        echo
+        gcloud services enable cloudfunctions.googleapis.com # Enable Cloud Functions API
+    else 
+        echo "Cloud Functions API enabled"
+    fi
+    if [ -z "$DEPLOYMENTMANAGER_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable deploymentmanager.googleapis.com\" to enable Deployment Manager API ***"
+        echo
+        gcloud services enable deploymentmanager.googleapis.com # Enable Deployment Manager API
+    else 
+        echo "Google Cloud Deployment Manager API enabled"
+    fi
+    if [ -z "$STACKDRIVERLOGGING_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable logging.googleapis.com\" to enable Stackdriver Loggin API ***"
+        echo
+        gcloud services enable logging.googleapis.com # Enable Stackdriver Loggin API
+    else 
+        echo "Stackdriver Logging API enabled"
+    fi
+    if [ -z "$STACKDRIVERMONITORING_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable monitoring.googleapis.com\" to enable Stackdriver Monitoring API ***"
+        echo
+        gcloud services enable monitoring.googleapis.com # Enable Stackdriver Monitoring API
+    else 
+        echo "Stackdriver Monitoring API enabled"
+    fi
+    if [ -z "$STACKDRIVERTRACE_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable cloudtrace.googleapis.com\" to enable Stackdriver Trace API ***"
+        echo
+        gcloud services enable cloudtrace.googleapis.com # Enable Stackdriver Trace API
+    else 
+        echo "Stackdriver Trace API enabled"
+    fi
+    if [ -z "$CLOUDDNS_API_STATUS" ]; then
+        echo
+        echo "*** Running command \"gcloud services enable dns.googleapis.com\" to enable CloudDNS API ***"
+        echo
+        gcloud services enable dns.googleapis.com # Enable CloudDNS API
+    else 
+        echo "CloudDNS API enabled"
+    fi
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"2")
+echo
+echo "*** Running the command \"gcloud container clusters list\" to display configured Kubernetes clusters ***"
+echo
+gcloud container clusters list
+echo
+echo "Do you want to create Kubernetes cluster $GCP_CLUSTER-cluster?"
+export CLUSTER_NAME=$(gcloud container clusters list --format="value(NAME)" --filter="NAME:$GCP_CLUSTER-cluster")
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped creating container cluster"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "gcloud container clusters create $GCP_CLUSTER-cluster --zone $GCP_ZONE --machine-type $GCP_MACHINE --scopes=service-control,service-management,compute-rw,storage-ro,cloud-platform,logging-write,monitoring-write,pubsub,datastore,trace --num-nodes $GCP_NUMNODES --enable-autoscaling --min-nodes=$GCP_MINNODES --max-nodes=$GCP_MAXNODES --network default --enable-cloud-logging --enable-cloud-monitoring --enable-autorepair --no-enable-ip-alias --no-enable-legacy-authorization --cluster-version=latest --preemptive # to create container cluster (DISABLED --enable-autoupgrade)"
+    echo "gcloud container clusters get-credentials $GCP_CLUSTER-cluster # to retrieve the credentials for $GCP_CLUSTER-cluster cluster ***"
+    echo "kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=\"\$(gcloud config get-value core/account)\" # to enable current user to set RBAC rules for Istio"
+    echo "gcloud container clusters describe $GCP_CLUSTER-cluster # to display cluster attributes"
+    echo "gcloud container clusters resize $GCP_CLUSTER-cluster --size 1 # to resize cluster"
+    echo "gcloud container clusters delete $GCP_CLUSTER-cluster # to delete cluster"
+elif [[ "$CLUSTER_NAME" == "$GCP_CLUSTER-cluster" ]]; then
+    echo
+    echo "Kubernetes cluster exists"
+    echo
+    echo "*** Troubleshooting Tips ***"
+    echo
+    echo "gcloud container clusters create $GCP_CLUSTER-cluster --zone $GCP_ZONE --machine-type $GCP_MACHINE --scopes=service-control,service-management,compute-rw,storage-ro,cloud-platform,logging-write,monitoring-write,pubsub,datastore,trace --num-nodes $GCP_NUMNODES --enable-autoscaling --min-nodes=$GCP_MINNODES --max-nodes=$GCP_MAXNODES --network default --enable-cloud-logging --enable-cloud-monitoring --enable-autorepair --no-enable-ip-alias --no-enable-legacy-authorization --cluster-version=latest --preemptible # to create container cluster (DISABLED --enable-autoupgrade)"
+    echo "gcloud container clusters get-credentials $GCP_CLUSTER-cluster # to retrieve the credentials for $GCP_CLUSTER-cluster cluster ***"
+    echo "kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=\"\$(gcloud config get-value core/account)\" # to enable current user to set RBAC rules for Istio"
+    echo "gcloud container clusters describe $GCP_CLUSTER-cluster # to display cluster attributes"
+    echo "gcloud container clusters resize $GCP_CLUSTER-cluster --size 1 # to resize cluster"
+    echo "gcloud container clusters delete $GCP_CLUSTER-cluster # to delete cluster"
+else
+    export STEP="${STEP},2"
+    echo
+    echo "*** Running the command below to create a cluster ***"
+    echo "\"gcloud container clusters create $GCP_CLUSTER-cluster --zone $GCP_ZONE --machine-type $GCP_MACHINE --scopes=service-control,service-management,compute-rw,storage-ro,cloud-platform,logging-write,monitoring-write,pubsub,datastore,trace --num-nodes $GCP_NUMNODES --enable-autoscaling --min-nodes=$GCP_MINNODES --max-nodes=$GCP_MAXNODES --network default --enable-cloud-logging --enable-cloud-monitoring --enable-autorepair --no-enable-ip-alias --no-enable-legacy-authorization --cluster-version=latest --preemptible\" to create container cluster (DISABLED --enable-autoupgrade)"
+    echo
+    gcloud container clusters create $GCP_CLUSTER-cluster --zone $GCP_ZONE --machine-type $GCP_MACHINE --scopes=service-control,service-management,compute-rw,storage-ro,cloud-platform,logging-write,monitoring-write,pubsub,datastore,trace --num-nodes $GCP_NUMNODES --enable-autoscaling --min-nodes=$GCP_MINNODES --max-nodes=$GCP_MAXNODES --network default --enable-cloud-logging --enable-cloud-monitoring --enable-autorepair --no-enable-ip-alias --no-enable-legacy-authorization --cluster-version=latest --preemptible # to create container cluster (DISABLED --enable-autoupgrade)
+    echo
+    echo "*** Running command \"gcloud container clusters get-credentials $GCP_CLUSTER-cluster\" to retrieve the credentials for $GCP_CLUSTER-cluster cluster ***"
+    echo
+    gcloud container clusters get-credentials $GCP_CLUSTER-cluster #Get container credentials for kubectl
+#    echo
+#    echo "*** Running command \"kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=\"\$(gcloud config get-value core/account)\"\" to enable current user to set RBAC rules for Istio***"
+#    echo
+#    kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user="$(gcloud config get-value core/account)"
+    echo
+    echo "*** Running the command \"gcloud container clusters describe $GCP_CLUSTER-cluster\" to display cluster description ***"
+    echo
+    gcloud container clusters describe $GCP_CLUSTER-cluster
+    echo
+    echo "*** Troubleshooting Tips ***"
+    echo
+    echo "# gcloud container clusters create $GCP_CLUSTER-cluster --zone $GCP_ZONE --machine-type $GCP_MACHINE --scopes=service-control,service-management,compute-rw,storage-ro,cloud-platform,logging-write,monitoring-write,pubsub,datastore,trace --num-nodes $GCP_NUMNODES --enable-autoscaling --min-nodes=$GCP_MINNODES --max-nodes=$GCP_MAXNODES --network default --enable-cloud-logging --enable-cloud-monitoring --enable-autorepair --no-enable-ip-alias --no-enable-legacy-authorization --cluster-version=latest --preemptible # to create container cluster (DISABLED --enable-autoupgrade)"
+    echo "# gcloud container clusters get-credentials $GCP_CLUSTER-cluster # to retrieve the credentials for $GCP_CLUSTER-cluster cluster ***"
+    echo "# kubectl create clusterrolebinding cluster-admin-binding --clusterrole=cluster-admin --user=\"\$(gcloud config get-value core/account)\" # to enable current user to set RBAC rules for Istio"
+    echo "gcloud container clusters describe $GCP_CLUSTER-cluster # to display cluster attributes"
+    echo "# gcloud container clusters resize $GCP_CLUSTER-cluster --size 1 # to resize cluster"
+    echo "# gcloud container clusters delete $GCP_CLUSTER-cluster # to delete cluster"
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"2B")
+echo
+echo "*** Running the command \"gcloud dns managed-zones list\" to display managed zones ***"
+echo
+gcloud dns managed-zones list
+echo
+echo "Do you want to create a managed-zone?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped creating a managed zone"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "gcloud dns managed-zones list # to list managed zones"
+else
+    export STEP="${STEP},2B"
+    echo
+    echo "Enter the DNS name, e.g. bookinfo.com"
+    read DNS_NAME
+    echo
+    echo "*** Running command \"gcloud dns managed-zones create --dns-name=${DNS_NAME} --description=\"${GCP_CLUSTER} zone\" ${GCP_CLUSTER}\" to view managed-zones configuration ***"
+    echo
+    gcloud dns managed-zones create --dns-name="${DNS_NAME}." --description="${GCP_CLUSTER} zone" "${GCP_CLUSTER}"
+    echo
+    echo "*** Running command \"gcloud dns managed-zones describe ${GCP_CLUSTER}\" to view managed-zones configuration ***"
+    echo
+    gcloud dns managed-zones describe ${GCP_CLUSTER}
+    echo
+    echo "*** Update the registrar's name server records with the records returned ***"
+    echo
+    read -n 1 -s -r -p "Press any key to continue after updating the registrar's name server records"
+    echo
+    echo "*** Run command \"watch dig techequity.cloud REPLACE_THIS_WITH_A_NAMESERVER\" to confirm name server record change ***"
+    echo
+    read -n 1 -s -r -p "Press any key to continue after server records have been updated"    
+    echo
+    echo "*** Run command \"gcloud compute addresses create ${GCP_CLUSTER}-gateway-ip --region ${GCP_REGION}\" to create a static IP ***"
+    echo
+    gcloud compute addresses create ${GCP_CLUSTER}-gateway-ip --region ${GCP_REGION}
+    export GATEWAYIP=$(gcloud compute addresses list --format='value(ADDRESS)')
+    echo
+    echo "*** Running command \"gcloud dns record-sets transaction start --zone=${GCP_CLUSTER}\" to set DNS records ***"
+    echo
+    gcloud dns record-sets transaction start --zone=${GCP_CLUSTER}
+    echo
+    echo "*** Running command \"gcloud dns record-sets transaction add --zone=${GCP_CLUSTER} --name="${DNS_NAME}" --ttl=300 --type=A ${GATEWAYIP}\" to set DNS records ***"
+    echo
+    gcloud dns record-sets transaction add --zone=${GCP_CLUSTER} --name="${DNS_NAME}" --ttl=300 --type=A ${GATEWAYIP}
+    echo
+    echo "*** Running command \"gcloud dns record-sets transaction add --zone=${GCP_CLUSTER} --name="www.${DNS_NAME}" --ttl=300 --type=A ${GATEWAYIP}\" to set DNS records ***"
+    echo
+    gcloud dns record-sets transaction add --zone=${GCP_CLUSTER} --name="www.${DNS_NAME}" --ttl=300 --type=A ${GATEWAYIP}
+    echo
+    echo "*** Running command \"gcloud dns record-sets transaction add --zone=${GCP_CLUSTER} --name="*.${DNS_NAME}" --ttl=300 --type=A ${GATEWAYIP}\" to set DNS records ***"
+    echo
+    gcloud dns record-sets transaction add --zone=${GCP_CLUSTER} --name="*.${DNS_NAME}" --ttl=300 --type=A ${GATEWAYIP}
+    echo
+    echo "*** Running command \"gcloud dns record-sets transaction execute --zone ${GCP_CLUSTER}\" to execute DNS records transaction ***"
+    echo
+    gcloud dns record-sets transaction execute --zone ${GCP_CLUSTER}
+    echo
+    echo "*** Run command \"watch host test.${DNS_NAME}\" to verify DNS wildcard ***"
+    echo
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue after verifying DNS wildcard"
+;;
+
+"3A")
+echo
+echo "*** Running the command \"kubectl -n kube-system get deployments\" to display configured deployments ***"
+echo
+kubectl -n kube-system get deployments
+echo
+echo "Do you want to install tiller?"
+export TILLER_DEPLOYMENT=$(kubectl -n kube-system get deployments | grep tiller-deploy | awk '{print $1}')
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped tiller installation"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl -n kube-system create serviceaccount tiller-serviceaccount # to create service account"
+    echo "kubectl -n kube-system describe serviceaccount tiller-serviceaccount # to describe"
+    echo "kubectl create clusterrolebinding tiller-clusterrole-binding --clusterrole=cluster-admin --serviceaccount=kube-system:tiller-serviceaccount # to create cluster role binding"
+    echo "kubectl -n kube-system describe clusterrolebinding tiller-clusterrole-binding # to describe"
+    echo "helm init --upgrade --service-account tiller-serviceaccount # to initialize and upgrade if Tiller is already installed"
+    echo "helm reset --force # to delete tiller pod"
+    echo "kubectl -n kube-system delete serviceaccount tiller-serviceaccount # to delete"
+    echo "kubectl -n kube-system delete clusterrolebinding tiller-clusterrole-binding # to delete"
+elif [[ "$TILLER_DEPLOYMENT" == "tiller-deploy" ]]; then
+    echo
+    echo "Tiller installed"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl -n kube-system create serviceaccount tiller-serviceaccount # to create service account"
+    echo "kubectl -n kube-system describe serviceaccount tiller-serviceaccount # to describe"
+    echo "kubectl create clusterrolebinding tiller-clusterrole-binding --clusterrole=cluster-admin --serviceaccount=kube-system:tiller-serviceaccount # to create cluster role binding"
+    echo "kubectl -n kube-system describe clusterrolebinding tiller-clusterrole-binding # to describe"
+    echo "helm init --upgrade --service-account tiller-serviceaccount # to initialize and upgrade if Tiller is already installed"
+    echo "helm reset --force # to delete tiller pod"
+    echo "kubectl -n kube-system delete serviceaccount tiller-serviceaccount # to delete"
+    echo "kubectl -n kube-system delete clusterrolebinding tiller-clusterrole-binding # to delete"
+else
+    echo
+    echo "*** Running the command \"kubectl -n kube-system create serviceaccount tiller-serviceaccount\" to create service account ***"
+    echo
+    kubectl -n kube-system create serviceaccount tiller-serviceaccount
+    echo
+    echo "*** Running command \"kubectl -n kube-system describe serviceaccount tiller-serviceaccount\" to display ***"
+    echo
+    kubectl -n kube-system describe serviceaccount tiller-serviceaccount
+    echo
+    echo "*** Running command \"kubectl create clusterrolebinding tiller-clusterrole-binding --clusterrole=cluster-admin --serviceaccount=kube-system:tiller-serviceaccount\" to create ***"
+    echo
+    kubectl create clusterrolebinding tiller-clusterrole-binding --clusterrole=cluster-admin --serviceaccount=kube-system:tiller-serviceaccount
+    echo
+    echo "*** Running command \"kubectl -n kube-system describe clusterrolebinding tiller-clusterrole-binding\" to display ***"
+    echo
+    kubectl -n kube-system describe clusterrolebinding tiller-clusterrole-binding
+    echo
+    echo "*** Running command \"helm init --upgrade --service-account tiller-serviceaccount\" to initialize ***"
+    echo
+    helm init --upgrade --service-account tiller-serviceaccount
+    echo
+    echo "*** Running command \"sleep 60\" to allow 60 seconds for tiller pods to initialize ***"
+    echo
+    sleep 60
+fi
+echo
+echo "*** Running the command \"helm list # to display ***"
+echo
+helm list
+echo
+echo "*** Running the command \"helm ls --all istio # to display Helm releases ***"
+echo
+helm ls --all istio
+echo
+echo "Do you want to install Istio core components using Helm package manager?"
+export DEPLOYMENT=$(helm list --namespace istio-system | grep istio | awk '{print $1}')
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped application installation of Istio with Helm package manager"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "gcloud container clusters get-credentials $GCP_CLUSTER-cluster # to retrieve the cluster credentials"
+    echo "current_dir=$PWD && cd $ISTIO_PATH && helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true # to install Istio from Istio home directory"
+    echo "Additional Optional Flags"
+    echo "--set ingress.enabled=false # to disable Ingress"
+    echo "--set gateways.istio-ingressgateway.enabled=false # to disable Ingress Gateway"
+    echo "--set gateways.istio-egressgateway.enabled=false # to disable Egress Gateway"
+    echo "--set galley.enabled=false # to disable Galley"
+    echo "--set sidecarInjectorWebhook.enabled=false # to disable Sidecar Injection"
+    echo "--set mixer.enabled=false # to disable Mixer"
+    echo "--set prometheus.enabled=false # to disable Prometheus"
+    echo "--set global.proxy.envoyStatsd.enabled=false # to disable Envoy"
+    echo "kubectl -n istio-system get pod | grep istio | awk '{print \$1}' | while read pod ; do echo \"\$pod\": ;kubectl -n istio-system describe pods \$pod; done # to display POD attributes ***" 
+    echo "kubectl -n istio-system get pod | grep istio | awk '{print \$1}' | while read pod ; do echo \"\$pod\": ;kubectl -n istio-system logs \$pod; done # to check log files ***"
+    echo "kubectl -n istio-system get services # to Display services"
+    echo "kubectl -n istio-system get deployment # to Display deployment"
+    echo "kubectl -n istio-system get pods # to Display PODs"
+    echo "helm delete --purge istio # to delete helm chart and release"
+    echo "helm reset --force # to delete tiller pod"
+    echo "current_dir=$PWD && cd $ISTIO_PATH && kubectl delete -f install/kubernetes/helm/istio/templates/crds.yaml -n istio-system && cd $current_dir # to delete Custom Resource Definitions"
+    echo "current_dir=$PWD && cd $ISTIO_PATH && helm upgrade istio install/kubernetes/helm/istio --namespace istio-system && cd $current_dir # to upgrade Istio"
+elif [[ "$DEPLOYMENT" == "istio" ]]; then
+    echo
+    echo "Istio is deployed"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "gcloud container clusters get-credentials $GCP_CLUSTER-cluster # to retrieve the cluster credentials"
+    echo "export CURRENT_DIR=$PWD && cd $ISTIO_PATH && helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true && cd $CURRENT_DIR # to install Istio from Istio home directory and go back to original directory"
+    echo "Additional Optional Flags"
+    echo "--set ingress.enabled=false # to disable Ingress"
+    echo "--set gateways.istio-ingressgateway.enabled=false # to disable Ingress Gateway"
+    echo "--set gateways.istio-egressgateway.enabled=false # to disable Egress Gateway"  
+    echo "--set galley.enabled=false # to disable Galley"
+    echo "--set sidecarInjectorWebhook.enabled=false # to disable Sidecar Injection"
+    echo "--set mixer.enabled=false # to disable Mixer"
+    echo "--set prometheus.enabled=false # to disable Prometheus"
+    echo "--set global.proxy.envoyStatsd.enabled=false # to disable Envoy"
+    echo "kubectl -n istio-system get pod | grep istio | awk '{print \$1}' | while read pod ; do echo \"\$pod\": ;kubectl -n istio-system describe pods \$pod; done # to display POD attributes ***"
+    echo "kubectl -n istio-system get pod | grep istio | awk '{print \$1}' | while read pod ; do echo \"\$pod\": ;kubectl -n istio-system logs \$pod; done # to check log files ***"
+    echo "kubectl -n istio-system get services # to Display services"
+    echo "kubectl -n istio-system get deployment # to Display deployment"
+    echo "kubectl -n istio-system get pods # to Display PODs"
+    echo "helm delete --purge istio # to delete helm chart and release"
+    echo "helm reset --force # to delete tiller pod"
+    echo "current_dir=$PWD && cd $ISTIO_PATH && kubectl delete -f install/kubernetes/helm/istio/templates/crds.yaml -n istio-system && cd $current_dir # to delete Custom Resource Definitions"
+    echo "current_dir=$PWD && cd $ISTIO_PATH && helm upgrade istio install/kubernetes/helm/istio --namespace istio-system && cd $current_dir # to upgrade Istio"
+else
+    export STEP="${STEP},3A"
+    echo
+    echo "*** Running command \"gcloud container clusters get-credentials $GCP_CLUSTER-cluster\" to retrieve the credentials for $GCP_CLUSTER-cluster cluster ***"
+    echo
+    gcloud container clusters get-credentials $GCP_CLUSTER-cluster --project=$GCP_PROJECT  #Get container credentials for kubectl
+    echo
+    echo "*** Running the command \"helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true\" to install Istio ***"
+    echo
+    current_dir=$PWD
+    cd $ISTIO_PATH
+    helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true
+    cd $current_dir
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"3B")
+echo
+echo "*** Running the command \"kubectl get namespace\" to display namespaces ***"
+echo
+kubectl get namespace
+echo
+echo "Do you want to update the cluster for Istio core components?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped updating the cluster for Istio core components"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "gcloud container clusters get-credentials $GCP_CLUSTER-cluster # to retrieve the cluster credentials"
+    echo "kubectl -n istio-system get pod | grep istio | awk '{print \$1}' | while read pod ; do echo \"\$pod\": ;kubectl -n istio-system describe pods \$pod; done # to display POD attributes ***" 
+    echo "kubectl -n istio-system get pod | grep istio | awk '{print \$1}' | while read pod ; do echo \"\$pod\": ;kubectl -n istio-system logs \$pod; done # to check log files ***"
+    echo "kubectl -n istio-system get services # to Display services"
+    echo "kubectl -n istio-system get deployment # to Display deployment"
+    echo "kubectl -n istio-system get pods # to Display PODs"
+else
+    export STEP="${STEP},3B"
+    echo
+    echo "*** Running command \"gcloud beta container clusters update ${GCP_CLUSTER}-cluster --project=$GCP_PROJECT --update-addons=Istio=ENABLED --istio-config=auth=$ISTIO_AUTH\" to update cluster with Istio ***"
+    echo
+    gcloud beta container clusters update ${GCP_CLUSTER}-cluster --project=$GCP_PROJECT --update-addons=Istio=ENABLED --istio-config=auth=$ISTIO_AUTH
+    echo
+    echo "*** Running command \"sleep 120\" to wait for istio PODs to initialize ***"
+    echo
+    sleep 120
+    echo
+    echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-tracing.yaml\" to configure Stackdriver tracing ***"
+    echo
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml -O ~/tmp/stackdriver-tracing.yaml
+    kubectl apply -f ~/tmp/stackdriver-tracing.yaml
+    echo
+    echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-logs.yaml\" to configure Stackdriver logging ***"
+    echo
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml -O ~/tmp/stackdriver-logs.yaml
+    kubectl apply -f ~/tmp/stackdriver-logs.yaml
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"4")
+echo
+echo "*** Running the command \"kubectl get namespace\" to display configured namespaces ***"
+echo
+kubectl get namespace
+echo
+echo "Do you want to create $APPLICATION_NAMESPACE namespace?"
+export NAMESPACE=$(kubectl get namespace | grep $APPLICATION_NAMESPACE | awk '{print $1}')
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped creating namespace"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl describe namespace $APPLICATION_NAMESPACE # to display namespace attributes"
+    echo "kubectl delete namespace $APPLICATION_NAMESPACE # to delete namespace"
+elif [[ "$NAMESPACE" == "$APPLICATION_NAMESPACE" ]]; then
+    echo
+    echo "Namespace exists"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl describe namespace $APPLICATION_NAMESPACE # to display namespace attributes"
+    echo "kubectl delete namespace $APPLICATION_NAMESPACE # to delete namespace"
+else
+    echo
+    echo "*** Running the command \"kubectl create namespace $APPLICATION_NAMESPACE\" to create namespace $APPLICATION_NAMESPACE ***"
+    echo
+    kubectl create namespace $APPLICATION_NAMESPACE
+fi
+echo
+echo "Do you want to label namespaces for automatic sidecar injection?"
+export NAMESPACE=$(kubectl get namespace | grep $APPLICATION_NAMESPACE | awk '{print $1}')
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped labelling namespaces for automatic sidecar injection"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl label namespace $APPLICATION_NAMESPACE istio-injection=enabled # to label namespaces for automatic sidecar injection"
+    echo "kubectl label namespace $APPLICATION_NAMESPACE istio-injection=disabled # to disable namespaces for automatic sidecar injection"
+    echo
+elif [[ "$NAMESPACE" == "$APPLICATION_NAMESPACE" ]]; then
+    export STEP="${STEP},4"
+    echo
+    echo "*** Running the command \"kubectl label namespace $APPLICATION_NAMESPACE istio-injection=enabled\" to label namespaces for automatic sidecar injection ***"
+    echo
+    kubectl label namespace $APPLICATION_NAMESPACE istio-injection=enabled
+else
+    echo
+    echo "Namespace does not exist"
+    echo
+    echo "*** Troubleshooting Tips ***"
+    echo
+    echo "kubectl create namespace $APPLICATION_NAMESPACE # to create namespace"        
+    echo "kubectl describe namespace $APPLICATION_NAMESPACE # to display namespace attributes"
+    echo "kubectl delete namespace $APPLICATION_NAMESPACE # to delete namespace"        
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"5")
+echo
+echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get service\" Display services ***"
+echo
+kubectl -n $APPLICATION_NAMESPACE get service # Display service
+echo
+echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get deployment\" Display deployment ***"
+echo
+kubectl -n $APPLICATION_NAMESPACE get deployment # Display deployment
+echo
+echo "Do you want to configure Kubernetes service and deployment?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped configuring services and deployment"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl -n $APPLICATION_NAMESPACE get services # to Display"
+    echo "kubectl -n $APPLICATION_NAMESPACE get deployments # to Display deployments"
+    echo "kubectl -n $APPLICATION_NAMESPACE get pods # to Display pods"
+    echo "kubectl -n $APPLICATION_NAMESPACE get deployments -o wide | grep $APPLICATION_NAME | awk '{print \$1}' | while read deployments ; do echo \"\$deployments\": ;kubectl -n $APPLICATION_NAMESPACE describe deployments \$deployments ; done # to check deployment configuration"
+    echo "kubectl -n $APPLICATION_NAMESPACE get services -o wide | grep $APPLICATION_NAME | awk '{print \$1}' | while read services ; do echo \"\$services\": ;kubectl -n $APPLICATION_NAMESPACE describe services \$services ; done # to check service configuration"
+    echo "kubectl -n $APPLICATION_NAMESPACE get pods -o wide | grep $GCP_CLUSTER-cluster | awk '{print \$1}' | while read pods ; do echo \"\$pods\": ;kubectl -n $APPLICATION_NAMESPACE describe pods \$pods ; done # to check pod configuration"
+    echo "kubectl -n $APPLICATION_NAMESPACE get pods -o wide | grep $GCP_CLUSTER-cluster | awk '{print \$1}' | while read pods ; do echo \"\$pods\": ;kubectl -n $APPLICATION_NAMESPACE logs \$pods ; done # to check pod configuration"
+    echo "kubectl -n $APPLICATION_NAMESPACE apply -f ${APPLICATION_YAML} # to apply service YAML"
+    echo "kubectl -n $APPLICATION_NAMESPACE delete -f ${APPLICATION_YAML} # to redeploy service YAML"
+else
+    export STEP="${STEP},5"        
+    echo
+    echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/application.yaml\" to create service ***"
+    echo
+    perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $APPLICATION_YAML > $TEMPDIR/application.yaml # Customize yaml
+    kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/application.yaml
+    echo
+    echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get service\" to display service ***"
+    echo
+    kubectl -n $APPLICATION_NAMESPACE get service
+    echo
+    echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get deployment\" to display deployment ***"
+    echo
+    kubectl -n $APPLICATION_NAMESPACE get deployment
+    echo
+    echo "*** Running command \"sleep 120\" to allow 120 seconds for pods to initialize ***"
+    echo
+    sleep 120
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"6")
+echo
+echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get virtualservice\" Display virtualservice***"
+echo
+kubectl -n $APPLICATION_NAMESPACE get virtualservice # Display virtualservice
+echo
+echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get gateway\" Display gateway***"
+echo
+kubectl -n $APPLICATION_NAMESPACE get gateway # Display gateway
+echo
+echo "Do you want to configure ingress?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped configuring ingress"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl -n $APPLICATION_NAMESPACE get ingress # to Display ingress"
+    echo "kubectl -n $APPLICATION_NAMESPACE get virtualservice # to Display virtualservice"
+    echo "kubectl -n $APPLICATION_NAMESPACE get gateway # to Display gateway"
+    echo "kubectl -n $APPLICATION_NAMESPACE get ingress | awk '{print \$1}' | while read ingress ; do echo \"\$ingress\": ;kubectl -n $APPLICATION_NAMESPACE describe ingress \$ingress ; done # to check ingress configuration"
+    echo "kubectl -n $APPLICATION_NAMESPACE apply -f ${INGRESS_YAML} # to apply ingress YAML"
+    echo "kubectl -n $APPLICATION_NAMESPACE delete -f ${INGRESS_YAML} # to redeploy ingress YAML"
+else
+    export STEP="${STEP},6"
+    echo
+    echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/ingress.yaml\" to create ingress ***"
+    echo
+    perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $INGRESS_YAML > $TEMPDIR/ingress.yaml # Customize yaml
+    kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/ingress.yaml
+    echo
+    echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get gateway\" to display gateway ***"
+    echo
+    kubectl -n $APPLICATION_NAMESPACE get gateway
+    echo
+    echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get virtualservice\" to display virtualservice ***"
+    echo
+    kubectl -n $APPLICATION_NAMESPACE get virtualservice
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"10")
+echo
+echo "*** Running the command \"kubectl -n istio-system get pods\" to display configured pods ***"
+echo
+kubectl -n istio-system get pods
+echo
+echo "Do you want to configure telemetry?"
+export POD=$(kubectl -n istio-system get pods | grep istio-telemetry | awk '{print $1}')
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped configuring telemetry"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl -n istio-system describe metric doublerequestcount # to display configuration ***"
+    echo "kubectl -n istio-system describe prometheus doublehandler # to display configuration ***"
+    echo "kubectl -n istio-system describe rule doubleprom # to display configuration ***"
+    echo "kubectl -n istio-system describe logentry newlog # to display configuration ***"
+    echo "kubectl -n istio-system describe stdio newhandler # to display configuration ***"
+    echo "kubectl -n istio-system describe rule newlogstdio # to display configuration ***"
+    echo "# kubectl -n istio-system apply -f $TEMPDIR/istio-telemetry.yaml # to create an Istio telemetry configuration ***"
+    echo "# kubectl -n istio-system delete -f $TEMPDIR/istio-telemetry.yaml # to delete Istio telemetry configuration ***"
+    echo "# kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 & # to forward dashboard URL ***"
+    echo "# kubectl -n istio-system logs \$(kubectl -n istio-system get pods -l istio-mixer-type=telemetry -o jsonpath='{.items[0].metadata.name}') -c mixer | grep \\"instance\\":\\"newlog.logentry.istio-system\\" # to displays log entries ***"
+    echo
+    echo "*** Dashboard Commands ***"
+    echo
+    echo "kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}' # to display external IP"
+    echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=grafana -o jsonpath='{.items[0].metadata.name}') 3000:3000 > /dev/null 2>&1 & # to proxy Grafana"
+    echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 > /dev/null 2>&1 & # to proxy Prometheus"
+    echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=servicegraph -o jsonpath='{.items[0].metadata.name}') 8088:8088 > /dev/null 2>&1 & # to proxy Servicegraph"
+    echo "kubectl -n istio-system port-forward \$(kubectl get pod -n istio-system -l app=jaeger -o jsonpath='{.items[0].metadata.name}') 16686:16686 > /dev/null 2>&1 & # to proxy Jaegar"
+    echo "kubectl -n istio-system port-forward \$(kubectl get pod -n istio-system -l app=kiali -o jsonpath='{.items[0].metadata.name}') 20001:20001 > /dev/null 2>&1 & # to proxy Kiali"
+    echo "killall kubectl # to remove all kubectl port-forward processes"
+elif [[ "$POD" == "istio-telemetry" ]]; then
+    echo
+    echo "Telemetry POD does not exist"
+    echo
+    echo "*** Troubleshooting Tips ***"
+    echo
+    echo "kubectl -n istio-system describe metric doublerequestcount # to display configuration ***"
+    echo "kubectl -n istio-system describe prometheus doublehandler # to display configuration ***"
+    echo "kubectl -n istio-system describe rule doubleprom # to display configuration ***"
+    echo "kubectl -n istio-system describe logentry newlog # to display configuration ***"
+    echo "kubectl -n istio-system describe stdio newhandler # to display configuration ***"
+    echo "kubectl -n istio-system describe rule newlogstdio # to display configuration ***"
+    echo "# kubectl -n istio-system apply -f $TEMPDIR/istio-telemetry.yaml # to create an Istio telemetry configuration ***"
+    echo "# kubectl -n istio-system delete -f $TEMPDIR/istio-telemetry.yaml # to delete Istio telemetry configuration ***"
+    echo "# kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 & # to forward dashboard URL ***"
+    echo "# kubectl -n istio-system logs \$(kubectl -n istio-system get pods -l istio-mixer-type=telemetry -o jsonpath='{.items[0].metadata.name}') -c mixer | grep \\"instance\\":\\"newlog.logentry.istio-system\\" # to displays log entries ***"
+    echo
+    echo "*** Dashboard Commands ***"
+    echo
+    echo "kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}' # to display external IP"
+    echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=grafana -o jsonpath='{.items[0].metadata.name}') 3000:3000 > /dev/null 2>&1 & # to proxy Grafana"
+    echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 > /dev/null 2>&1 & # to proxy Prometheus"
+    echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=servicegraph -o jsonpath='{.items[0].metadata.name}') 8088:8088 > /dev/null 2>&1 & # to proxy Servicegraph"
+    echo "kubectl -n istio-system port-forward \$(kubectl get pod -n istio-system -l app=jaeger -o jsonpath='{.items[0].metadata.name}') 16686:16686 > /dev/null 2>&1 & # to proxy Jaegar"
+    echo "kubectl -n istio-system port-forward \$(kubectl get pod -n istio-system -l app=kiali -o jsonpath='{.items[0].metadata.name}') 20001:20001 > /dev/null 2>&1 & # to proxy Kiali"
+    echo "killall kubectl # to remove all kubectl port-forward processes"
+else
+    export STEP="${STEP},10"
+    echo
+    echo "*** Running command \"kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'\" in new cloudshell to display external IP ***"
+    echo
+    kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+    echo
+    echo "*** Running command \"kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=grafana -o jsonpath='{.items[0].metadata.name}') > /dev/null 2>&1 3000:3000 &\" to proxy Grafana"
+    kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=grafana -o jsonpath='{.items[0].metadata.name}') 3000:3000 > /dev/null 2>&1 &
+    echo "*** Change cloudshell port to \"3000\" to preview Grafana console ***"
+    echo
+    echo "*** kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 > /dev/null 2>&1 &\" to proxy Prometheus ***"
+    echo
+    kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 > /dev/null 2>&1 &
+    echo "*** Change cloudshell port to \"9090\" to preview Prometheus console ***"
+    echo
+    echo "*** Running command \"kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=servicegraph -o jsonpath='{.items[0].metadata.name}') 8088:8088 > /dev/null 2>&1 &\" to proxy Servicegraph ***"
+    echo
+    kubectl -n istio-system port-forward $(kubectl -n istio-system get pod -l app=servicegraph -o jsonpath='{.items[0].metadata.name}') 8088:8088 > /dev/null 2>&1 &
+    echo "*** Change cloudshell port to \"8088\" to preview ServiceGraph console ***"
+    echo
+    echo "*** Running command \"kubectl port-forward -n istio-system \$(kubectl get pod -n istio-system -l app=jaeger -o jsonpath='{.items[0].metadata.name}') 16686:16686 > /dev/null 2>&1 &\" to proxy Jaegar ***"
+    echo
+    kubectl port-forward -n istio-system $(kubectl get pod -n istio-system -l app=jaeger -o jsonpath='{.items[0].metadata.name}') 16686:16686 > /dev/null 2>&1 &
+    echo "*** Change cloudshell port to \"16686\" to preview Jaeger console ***"
+    echo
+    echo "*** Running command \"kubectl port-forward -n istio-system \$(kubectl get pod -n istio-system -l app=kiali -o jsonpath='{.items[0].metadata.name}') 20001:20001 > /dev/null 2>&1 &\" to proxy Kiali ***"
+    echo
+    kubectl port-forward -n istio-system $(kubectl get pod -n istio-system -l app=kiali -o jsonpath='{.items[0].metadata.name}') 20001:20001 > /dev/null 2>&1 &
+    echo "*** Change cloudshell port to \"20001\" to preview kiali console ***"
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"7")
+echo
+echo "*** Running the command \"kubectl -n istio-system get svc istio-ingressgateway\" to display configured ingress gateways ***"
+echo
+kubectl -n istio-system get svc istio-ingressgateway
+export INGRESS_HOST=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+export INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="http2")].port}')
+export SECURE_INGRESS_PORT=$(kubectl -n istio-system get service istio-ingressgateway -o jsonpath='{.spec.ports[?(@.name=="https")].port}')
+echo
+echo "BookInfo Application Exploration"
+echo
+echo "The Bookinfo sample deploys 3 versions of the reviews service:"
+echo
+echo "      Version v1 doesn’t call the ratings service."
+echo "      Version v2 calls the ratings service, and displays each rating as 1 to 5 black stars."
+echo "      Version v3 calls the ratings service, and displays each rating as 1 to 5 red stars."
+echo
+echo "Use your browser to access the BookInfo application using the URL http://$INGRESS_HOST:$INGRESS_PORT/productpage"
+echo
+    export STEP="${STEP},7"
+#    read -n 1 -s -r -p "Press any key to continue"
+#    echo
+#    echo "*** Running command \"curl -o /dev/null -sw \"%{http_code}\\n\" http://$INGRESS_HOST:$INGRESS_PORT/productpage\" to access the application"
+#    echo
+#    curl -o /dev/null -sw \"%{http_code}\\n\" http://$INGRESS_HOST:$INGRESS_PORT/productpage
+    echo
+    echo "Do you want to define the available subsets in destination rules?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped defining the available subsets in destination rules ***"
+        echo
+    else
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/destination-rule-all.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f define-available-subsets-destination-rules.yaml\" to define the available subsets in destination rules ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/define-available-subsets-destination-rules.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/define-available-subsets-destination-rules.yaml
+        echo
+        echo "*** Run command \"siege -c 1 -d 10 -r 10000 -b http://$INGRESS_HOST:$INGRESS_PORT/productpage\" in new cloudshell to invoke 10,000 requests ***"
+        echo
+        read -n 1 -s -r -p "Press any key to continue after applying load"
+#        echo
+#        echo "*** Run commands below in new cloudshell to launch telemetry tools ***"
+#        echo
+#        echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=grafana -o jsonpath='{.items[0].metadata.name}') 3000:3000 > /dev/null 2>&1 & # to preview Grafana"
+#        echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 > /dev/null 2>&1 & # to preview Prometheus"
+#        echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=jaeger -o jsonpath='{.items[0].metadata.name}') 16686:16686 > /dev/null 2>&1 & # to preview Jaegar"
+#        echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=kiali -o jsonpath='{.items[0].metadata.name}') 20001:20001 > /dev/null 2>&1 & # to preview Kiali"
+#        echo
+#        read -n 1 -s -r -p "Press any key to continue after executing commands in new cloudshell"
+    fi    
+    
+    echo "Do you want to explore routing all traffic to v1 of each microservice?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped routing all traffic to v1 of each microservice ***"
+        echo
+    else
+        echo
+        export PFILE=CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/virtual-service-all-v1.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-all-traffic-to-v1.yaml\" to route all traffic to v1 of each microservice ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/route-all-traffic-to-v1.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-all-traffic-to-v1.yaml
+        echo
+    fi
+   
+    echo "Do you want to explore routing requests from the jason user to v2 of the reviews microservice?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped routing requests from the jason user to v2 of the reviews microservice ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/virtual-service-reviews-test-v2.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-jason-user-to-v2.yaml\" to route requests to jason user ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/route-jason-user-to-v2.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-jason-user-to-v2.yaml
+        echo
+        echo "*** Run command \"siege -c 1 -d 10 -r 10000 -b http://$INGRESS_HOST:$INGRESS_PORT/productpage -H \"end-user: Jason\"\" in new cloudshell to invoke 10,000 requests ***"
+        echo
+        read -n 1 -s -r -p "Press any key to continue after applying load"
+        echo
+    fi
+    
+    echo "Do you want to explore using telemetry tools?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped exporation using telemetry tools ***"
+        echo
+    else
+        echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=grafana -o jsonpath='{.items[0].metadata.name}') 3000:3000 & # to proxy Grafana"
+        echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=prometheus -o jsonpath='{.items[0].metadata.name}') 9090:9090 & # to proxy Prometheus"
+        echo "kubectl -n istio-system port-forward \$(kubectl -n istio-system get pod -l app=servicegraph -o jsonpath='{.items[0].metadata.name}') 8088:8088 & # to proxy Servicegraph"
+        echo "kubectl -n istio-system port-forward \$(kubectl get pod -n istio-system -l app=jaeger -o jsonpath='{.items[0].metadata.name}') 16686:16686 & # to proxy Jaegar"
+        echo "kubectl -n istio-system port-forward \$(kubectl get pod -n istio-system -l app=kiali -o jsonpath='{.items[0].metadata.name}') 20001:20001 & # to proxy Kiali"
+    echo
+    fi
+  
+    echo "Do you want to explore injecting an HTTP delay fault to the ratings microservice?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped injecting an HTTP delay fault to the ratings microservice ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/virtual-service-ratings-test-delay.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/inject-http-delay-fault.yaml\" to inject an HTTP delay fault ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/inject-http-delay-fault.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/inject-http-delay-fault.yaml
+        echo
+    fi
+    
+    echo "Do you want to explore injecting an HTTP abort fault to the ratings microservice?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped injecting an HTTP abort fault to the ratings microservice ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/virtual-service-ratings-test-abort.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f inject-http-abort-fault.yaml\" to inject an HTTP abort fault ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/inject-http-abort-fault.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/inject-http-abort-fault.yaml
+        echo
+    fi
+  
+    echo "Do you want to explore redirecting 50% of traffic to v3 of the reviews microservice?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped redirecting 50% of traffic to v3 of the reviews microservice ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/virtual-service-reviews-50-v3.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-half-traffic-to-v3.yaml\" to redirect 50% of traffic to v3 ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/redirect-half-traffic-to-v3.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-half-traffic-to-v3.yaml
+        echo
+    fi
+  
+    echo "Do you want to explore redirecting 100% of traffic to v3 of the reviews microservice?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped redirecting 100% of traffic to v3 of the reviews microservice ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/virtual-service-reviews-v3.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-all-traffic-to-v3.yaml\" to redirect 100% of traffic to v3 ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view YAML file changes"
+        echo
+        cat $PFILE $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/redirect-all-traffic-to-v3.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-all-traffic-to-v3.yaml
+        echo
+    fi
+    
+    echo "Do you want to explore redirecting 100% of traffic to v2 of a microservice that calls the ratings service?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped redirecting 100% of traffic to v2 of a microservice that calls the ratings service ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=virtual-service-all-v2.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f redirect-all-traffic-to-v2.yaml\" to redirect 100% of traffic to v2 that calls the ratings service ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/redirect-all-traffic-to-v3.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-all-traffic-to-v3.yaml
+        echo
+    fi
+  
+    echo "Do you want to explore adding a 2 secs delay to the ratings microservice service?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped adding a 2 secs delay to the ratings microservice service ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=virtual-service-ratings-2sec-delay.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/add-2secs-delay.yaml\" to add a 2 secs delay to the ratings service ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view the YAML file"
+        echo
+        cat $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/add-2secs-delay.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/add-2secs-delay.yaml
+        echo
+    fi
+   
+    echo "Do you want to explore adding a 0.5 secs delay to the review service?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped adding a 0.5 secs delay to the review service ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=virtual-service-reviews-pt5sec-delay.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/add-half-secs-delay.yaml\" to add a 0.5 secs delay to the review service ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view YAML file changes"
+        echo
+        cat $PFILE $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/add-half-secs-delay.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/add-half-secs-delay.yaml
+        echo
+    fi
+    
+    echo "Do you want to explore routing all traffic to v1 of each microservice?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped routing all traffic to v1 of each microservice ***"
+        echo
+    else 
+        echo 
+        export PFILE=$CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/networking/virtual-service-all-v1.yaml
+        echo 
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-all-traffic-to-v1.yaml\" to route all traffic to v1 of each microservice ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view YAML file changes"
+        echo
+        cat $PFILE $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/route-all-traffic-to-v1.yaml # Customize yaml
+        kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-all-traffic-to-v1.yaml
+        echo
+    fi
+
+    echo "Do you want explore enabling rate limits using memquota?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped enabling rate limits using memquota ***"
+        echo
+    else
+        echo 
+        export PFILE=$CFILE
+        export CFILE=$ISTIO_PATH/samples/bookinfo/policy/mixer-rule-productpage-ratelimit.yaml
+        echo 
+        echo "*** Running command \"kubectl -n istio-system apply -f $TEMPDIR/enable-rate-limits-using-memquota.yaml\" to enable rate limits using memquota ***"
+        echo
+        read -n 1 -s -r -p "Press any key to view YAML file changes"
+        echo
+        cat $PFILE $CFILE
+        echo
+        read -n 1 -s -r -p "Press any key to apply YAML file"
+        echo
+        perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/enable-rate-limits-using-memquota.yaml # Customize yaml
+        kubectl -n istio-system apply -f $TEMPDIR/enable-rate-limits-using-memquota.yaml
+        echo
+   fi 
+   
+    echo
+    echo "Do you want to kill all kubectl port forwarding processes?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped killing all kubectl port forwarding processes ***"
+        echo
+    else
+        echo
+        echo "*** Running command \"killall kubectl\" to kubectl port forwarding processes ***"
+        echo
+        killall kubectl
+    fi
+    echo
+    echo "Do you want to delete namespaces and destination rules?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "*** Skipped deleting namespaces and destination rules ***"
+        echo
+    else
+        echo
+        echo "*** Running command \"kubectl delete namespace $APPLICATION_NAMESPACE\" to delete namespace ***"
+        echo
+        kubectl delete namespace $APPLICATION_NAMESPACE
+    fi
+    echo
+    echo "Do you want to delete virtual service and gateway?"
+    if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+        echo
+        echo "Skipped deleting virtual service and gateway"
+        echo
+        echo "*** Useful Tips ***"
+        echo
+        echo "kubectl -n $APPLICATION_NAMESPACE get virtualservice # to Display virtualservice"
+        echo "kubectl -n $APPLICATION_NAMESPACE get gateway # to Display gateway"
+    else
+        if [[ $VIRTUALSERVICE != "" ]]; then
+            echo
+            echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE delete virtualservice $VIRTUALSERVICE\" to delete virtualservice  ***"
+            echo
+            kubectl -n $APPLICATION_NAMESPACE delete virtualservice $VIRTUALSERVICE
+            echo
+            echo "*** Troubleshooting Tips ***"
+            echo
+            echo "kubectl -n $APPLICATION_NAMESPACE get virtualservice $VIRTUALSERVICE # to get"
+            echo "kubectl -n $APPLICATION_NAMESPACE delete virtualservice  $VIRTUALSERVICE # to delete"
+        else
+            echo
+            echo "*** Virtualservice not found ***"
+            echo
+        fi
+        if [[ $GATEWAY != "" ]]; then
+            echo
+            echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE delete gateway $GATEWAY\" to delete gateway  ***"
+            echo
+            kubectl -n $APPLICATION_NAMESPACE delete gateway $GATEWAY
+            echo
+            echo "*** Troubleshooting Tips ***"
+            echo
+            echo "kubectl -n $APPLICATION_NAMESPACE get gateway $GATEWAY # to get"
+            echo "kubectl -n $APPLICATION_NAMESPACE delete gateway  $GATEWAY # to delete"
+        else
+            echo
+            echo "*** Gateway not found ***"
+            echo
+        fi
+    fi
+echo
+echo "Useful Tips"
+echo
+echo "kubectl -n $APPLICATION_NAMESPACE get gateway -o yaml # to display the defined rules"
+echo "kubectl -n $APPLICATION_NAMESPACE get virtualservices -o yaml # to display the defined routes"
+echo "kubectl -n $APPLICATION_NAMESPACE get destinationrules -o yaml # to display the defined rules"
+echo "kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/<configuration.yaml> # to create an Istio configuration"
+echo "kubectl -n $APPLICATION_NAMESPACE delete -f $TEMPDIR/<configuration.yaml> # to delete configuration"
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"8")
+export STEP="${STEP},8"
+echo
+echo "*** Running the command \"ps -elf | grep kubectl\" to display processes ***"
+echo
+ps -elf | grep kubectl # Display processes
+echo
+echo "Do you want to kill all kubectl processes?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped killing all kubectl processes"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "killall kubectl # to kill app processes"
+else
+    echo
+    echo "*** Running command \"killall kubectl\" to remove all kubectl port-forward processes ***"
+    echo
+    killall kubectl
+fi
+echo
+echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get virtualservice\" Display virtualservice***"
+echo
+kubectl -n $APPLICATION_NAMESPACE get virtualservice # Display virtualservice
+export VIRTUALSERVICE=$(kubectl -n $APPLICATION_NAMESPACE get virtualservice | grep ${APPLICATION_NAME} | awk '{print $1}')
+echo
+echo "*** Running the command \"kubectl -n $APPLICATION_NAMESPACE get gateway\" Display gateway***"
+echo
+kubectl -n $APPLICATION_NAMESPACE get gateway # Display gateway
+export GATEWAY=$(kubectl -n $APPLICATION_NAMESPACE get gateway | grep ${APPLICATION_NAME} | awk '{print $1}')
+echo
+echo "Do you want to delete virtual service and gateway?"
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "Skipped deleting virtual service and gateway"
+    echo
+    echo "*** Useful Tips ***"
+    echo
+    echo "kubectl -n $APPLICATION_NAMESPACE get virtualservice # to Display virtualservice"
+    echo "kubectl -n $APPLICATION_NAMESPACE get gateway # to Display gateway"
+else
+    if [[ $VIRTUALSERVICE != "" ]]; then
+        echo
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE delete virtualservice $VIRTUALSERVICE\" to delete virtualservice  ***"
+        echo
+        kubectl -n $APPLICATION_NAMESPACE delete virtualservice $VIRTUALSERVICE
+    else
+        echo
+        echo "*** Virtualservice not found ***"
+        echo
+    fi
+    if [[ $GATEWAY != "" ]]; then
+        echo
+        echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE delete gateway $GATEWAY\" to delete gateway  ***"
+        echo
+        kubectl -n $APPLICATION_NAMESPACE delete gateway $GATEWAY
+    else
+        echo
+        echo "*** Gateway not found ***"
+        echo
+    fi
+fi
+echo
+echo "*** Running the command \"kubectl get namespace\" to display configured namespaces ***"
+echo
+kubectl get namespace
+echo
+echo "Do you want to delete the ${APPLICATION_NAMESPACE} namespace?"
+export NAMESPACE=$(kubectl get namespace | grep ${APPLICATION_NAMESPACE} | awk '{print $1}')
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "*** Skipped deleting ${APPLICATION_NAMESPACE} namespace ***"
+    echo
+else
+    if [[ "$NAMESPACE" == "${APPLICATION_NAMESPACE}" ]]; then
+        echo
+        echo "*** Running the command \"kubectl delete namespace ${APPLICATION_NAMESPACE}\" to delete namespace ***"
+        echo
+        kubectl delete namespace ${APPLICATION_NAMESPACE}
+    else
+        echo
+        echo "Namespace does not"
+        echo
+        echo "*** Useful Tips ***"
+        echo
+        echo "kubectl describe namespace ${APPLICATION_NAMESPACE} # to display namespace attributes"
+        echo "kubectl delete namespace ${APPLICATION_NAMESPACE} # to delete namespace"
+    fi
+fi
+echo
+echo "*** Running the command \"gcloud container clusters list\" to display configured Kubernetes clusters ***"
+echo
+gcloud container clusters list
+echo
+echo "Do you want to delete $GCP_CLUSTER-cluster cluster?"
+export CLUSTER_NAME=$(gcloud container clusters list --format="value(NAME)" --filter="NAME:$GCP_CLUSTER-cluster")
+if [[ "no" == $(ask_yes_or_no "Are you sure?") || "no" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
+    echo
+    echo "*** Skipped deleting cluster ***"
+    echo
+elif [[ ! "$CLUSTER_NAME" == "$GCP_CLUSTER-cluster" ]]; then
+    echo
+    echo "$GCP_CLUSTER-cluster does not exist"
+else
+    echo
+    echo "*** Running command \"gcloud container clusters delete $GCP_CLUSTER-cluster\" to delete cluster ***"
+    echo
+    gcloud container clusters delete $GCP_CLUSTER-cluster
+fi
+echo
+read -n 1 -s -r -p "Press any key to continue"
+;;
+
+"Q")
+echo
+exit
+;;
+"q")
+echo
+exit
+;;
+* )
+echo
+echo "Option not available"
+;;
+esac
+sleep 1
+done
