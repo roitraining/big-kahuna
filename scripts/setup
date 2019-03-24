@@ -64,7 +64,8 @@ if [ -x "$(command -v istioctl)" ]; then
     echo "Do you wish re-install Istio?"
     if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
         cd ~/ && rm -rf ~/istio*   
-        curl -L https://git.io/getLatestIstio | sh -
+        # curl -L https://git.io/getLatestIstio | sh -
+        curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.2.0 sh -
         cd istio*
         echo
         echo "*** Istio installed in directory $PWD ***"
@@ -76,7 +77,8 @@ else
     echo "Do you wish to install Istio?"
     if [[ "yes" == $(ask_yes_or_no "Are you sure?") || "yes" == $(ask_yes_or_no "Are you *really* sure?") ]]; then
         cd ~/ && rm -rf ~/istio*   
-        curl -L https://git.io/getLatestIstio | sh -
+        # curl -L https://git.io/getLatestIstio | sh -
+        curl -L https://git.io/getLatestIstio | ISTIO_VERSION=1.2.0 sh -
         cd istio*
         echo
         echo "*** Istio installed in directory $PWD ***"
