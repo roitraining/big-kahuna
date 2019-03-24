@@ -565,7 +565,6 @@ else
     current_dir=$PWD
     cd $ISTIO_PATH
     helm install install/kubernetes/helm/istio-init --name istio-init --namespace istio-system
-    echo
     echo "*** Running command \"sleep 60\" to allow 60 seconds for pods to initialize ***"
     echo
     sleep 60
