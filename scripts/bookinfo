@@ -118,8 +118,8 @@ cat<<EOF
         Menu for Deploying BookInfo Application to Explore Istio Traffic Management and Telemetry Features
 -------------------------------------------------------------------------------------------------------------------
 Please enter number to select your choice:
-(1)  Enable APIs
-(2)  Create Kubernetes cluster
+(1)  Enable APIs (~2 mins)
+(2)  Create Kubernetes cluster (~3 mins)
 (3A) Install Istio core components using Helm
 (3B) Install Istio core components using GKE  
 (4)  Configure namespace for automatic sidecar injection
@@ -553,11 +553,13 @@ else
     echo
     gcloud container clusters get-credentials $GCP_CLUSTER-cluster --project=$GCP_PROJECT  #Get container credentials for kubectl
     echo
-    echo "*** Running the command \"helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true\" to install Istio ***"
+    # echo "*** Running the command \"helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true\" to install Istio ***"
+    echo "*** helm install install/kubernetes/helm/istio-init --name istio-init --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true\" to install Istio ***"
     echo
     current_dir=$PWD
     cd $ISTIO_PATH
-    helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true
+    # helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true
+    helm install install/kubernetes/helm/istio-init --name istio-init --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true
     cd $current_dir
 fi
 echo
