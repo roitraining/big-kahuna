@@ -120,11 +120,11 @@ cat<<EOF
 Please enter number to select your choice:
 (1)  Enable APIs (~2 mins)
 (2)  Create Kubernetes cluster (~3 mins)
-(3A) Install Istio core components using Helm
-(3B) Install Istio core components using GKE  
-(4)  Configure namespace for automatic sidecar injection
-(5)  Configure service and deployment
-(6)  Configure gateway and virtualservice
+(3A) Install Istio core components using Helm (~2 mins)
+(3B) Install Istio core components using GKE 
+(4)  Configure namespace for automatic sidecar injection (~1 min)
+(5)  Configure service and deployment (~2 mins)
+(6)  Configure gateway and virtualservice (~1 min)
 (7)  Explore traffic routing
 (8)  Delete all resources
 (Q)  Quit
@@ -907,6 +907,8 @@ echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/define-available-subsets-destination-rules.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/define-available-subsets-destination-rules.yaml
         echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
+        echo
         echo "*** Run command \"siege -c 1 -d 10 -r 10000 -b http://$INGRESS_HOST:$INGRESS_PORT/productpage\" in new cloudshell to invoke 10,000 requests ***"
         echo
         read -n 1 -s -r -p "Press any key to continue after applying load"
@@ -942,6 +944,8 @@ echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/route-all-traffic-to-v1.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-all-traffic-to-v1.yaml
         echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
+        echo
     fi
    
     echo "Do you want to explore routing requests from the jason user to v2 of the reviews microservice?"
@@ -964,6 +968,8 @@ echo
         echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/route-jason-user-to-v2.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-jason-user-to-v2.yaml
+        echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
         echo
         echo "*** Run command \"siege -c 1 -d 10 -r 10000 -b http://$INGRESS_HOST:$INGRESS_PORT/productpage -H \"end-user: Jason\"\" in new cloudshell to invoke 10,000 requests ***"
         echo
@@ -1006,6 +1012,8 @@ echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/inject-http-delay-fault.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/inject-http-delay-fault.yaml
         echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
+        echo
     fi
     
     echo "Do you want to explore injecting an HTTP abort fault to the ratings microservice?"
@@ -1028,6 +1036,8 @@ echo
         echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/inject-http-abort-fault.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/inject-http-abort-fault.yaml
+        echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
         echo
     fi
   
@@ -1052,6 +1062,8 @@ echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/redirect-half-traffic-to-v3.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-half-traffic-to-v3.yaml
         echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
+        echo
     fi
   
     echo "Do you want to explore redirecting 100% of traffic to v3 of the reviews microservice?"
@@ -1074,6 +1086,8 @@ echo
         echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/redirect-all-traffic-to-v3.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-all-traffic-to-v3.yaml
+        echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
         echo
     fi
     
@@ -1098,6 +1112,8 @@ echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/redirect-all-traffic-to-v3.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/redirect-all-traffic-to-v3.yaml
         echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
+        echo
     fi
   
     echo "Do you want to explore adding a 2 secs delay to the ratings microservice service?"
@@ -1120,6 +1136,8 @@ echo
         echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/add-2secs-delay.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/add-2secs-delay.yaml
+        echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
         echo
     fi
    
@@ -1144,6 +1162,8 @@ echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/add-half-secs-delay.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/add-half-secs-delay.yaml
         echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
+        echo
     fi
     
     echo "Do you want to explore routing all traffic to v1 of each microservice?"
@@ -1166,6 +1186,8 @@ echo
         echo
         perl -p -e 's/\$\{([^}]+)\}/defined $ENV{$1} ? $ENV{$1} : ""/eg' $CFILE > $TEMPDIR/route-all-traffic-to-v1.yaml # Customize yaml
         kubectl -n $APPLICATION_NAMESPACE apply -f $TEMPDIR/route-all-traffic-to-v1.yaml
+        echo
+        echo "*** Refresh browser using URL \"http://$INGRESS_HOST:$INGRESS_PORT/productpage\" ***"
         echo
     fi
 
