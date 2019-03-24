@@ -120,7 +120,7 @@ cat<<EOF
 Please enter number to select your choice:
 (1)  Enable APIs (~2 mins)
 (2)  Create Kubernetes cluster (~3 mins)
-(3A) Install Istio core components using Helm (~2 mins)
+(3A) Install Istio core components using Helm (~3 mins)
 (3B) Install Istio core components using GKE 
 (4)  Configure namespace for automatic sidecar injection (~1 min)
 (5)  Configure service and deployment (~2 mins)
