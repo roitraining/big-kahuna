@@ -909,6 +909,7 @@ echo
         export CFILE=$ISTIO_PATH/samples/bookinfo/networking/destination-rule-all.yaml
         echo 
         echo "*** Running command \"kubectl -n $APPLICATION_NAMESPACE apply -f define-available-subsets-destination-rules.yaml\" to define the available subsets in destination rules ***"
+        echo "*** YALM file URL in Istio repo: https://github.com/istio/istio/blob/master/samples/bookinfo/networking/destination-rule-all.yaml ***"
         echo
         read -n 1 -s -r -p "Press any key to view the YAML file"
         echo
