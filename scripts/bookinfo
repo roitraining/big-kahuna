@@ -556,7 +556,16 @@ else
     gcloud container clusters get-credentials $GCP_CLUSTER-cluster --project=$GCP_PROJECT  #Get container credentials for kubectl
     echo
     # echo "*** Running the command \"helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true\" to install Istio ***"
-    echo "*** helm install install/kubernetes/helm/istio-init --name istio-init --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true\" to install Istio ***"
+    echo "*** helm install install/kubernetes/helm/istio-init --name istio-init --namespace istio-system\" to install the istio-init chart to bootstrap all the Istio CRDs ***"
+    echo
+    helm install install/kubernetes/helm/istio-init --name istio-init --namespace istio-system
+    echo
+    echo "*** Running command \"sleep 60\" to allow 60 seconds for pods to initialize ***"
+    echo
+    sleep 60
+    echo "*** Running the command \"helm install install/kubernetes/helm/istio --name istio --namespace istio-system --set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true\" to install additional components ***"
+    echo
+    helm install install/kubernetes/helm/istio --name istio --namespace istio-system -set grafana.enabled=true --set servicegraph.enabled=true --set tracing.enabled=true --set kiali.enabled=true
     echo
     current_dir=$PWD
     cd $ISTIO_PATH
