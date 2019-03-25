@@ -335,14 +335,22 @@ else
     echo
     gcloud beta container clusters update $GCP_CLUSTER --zone=$GCP_ZONE --update-addons=Istio=ENABLED --istio-config=auth=MTLS_PERMISSIVE
     echo
-    echo "*** Running command \"sleep 180\" to wait for istio PODs to initialize ***"
+    echo "*** Running command \"sleep 120\" to wait for istio PODs to initialize ***"
     echo
-    sleep 180
+    sleep 120
+    echo
+    echo "*** Running command \"wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml -O ~/tmp/stackdriver-tracing.yaml\" to get Stackdriver tracing yaml file ***"
+    echo
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml -O ~/tmp/stackdriver-tracing.yaml
     echo
     echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-tracing.yaml\" to configure Stackdriver tracing ***"
     echo
-    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-tracing.yaml -O ~/tmp/stackdriver-tracing.yaml
+    mkdir /tmp > /dev/null 2>&1
     kubectl apply -f ~/tmp/stackdriver-tracing.yaml
+    echo
+    echo "*** Running command \"wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml -O ~/tmp/stackdriver-logs.yaml\" to get Stackdriver tracing yaml file ***"
+    echo
+    wget https://storage.googleapis.com/gke-release/istio/release/1.0.3-gke.0/stackdriver/stackdriver-logs.yaml -O ~/tmp/stackdriver-logs.yaml
     echo
     echo "*** Running command \"kubectl apply -f ~/tmp/stackdriver-logs.yaml\" to configure Stackdriver logging ***"
     echo
